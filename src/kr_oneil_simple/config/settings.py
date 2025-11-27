@@ -12,6 +12,7 @@ class TelegramSettings:
     """텔레그램 설정"""
     token: str = ""
     chat_id: str = ""
+    poll_timeout: int = 30  # 롱 폴링 타임아웃 (초)
 
 
 @dataclass
@@ -160,9 +161,11 @@ def load_settings() -> Settings:
     # 텔레그램 설정
     settings.telegram.token = os.environ.get('TELEGRAM_TOKEN', '')
     settings.telegram.chat_id = os.environ.get('TELEGRAM_CHAT_ID', '')
+    settings.telegram.poll_timeout = _get_env_int('TELEGRAM_POLL_TIMEOUT', 30)
 
     # 스캔 설정
     settings.scan.interval_seconds = _get_env_int('SCAN_INTERVAL', 1800)
+    settings.scan.request_delay = _get_env_float('REQUEST_DELAY', 1.0)
 
     # 패턴 설정
     settings.pattern.volume_surge_min = _get_env_float('VOLUME_SURGE_MIN', 50.0)
@@ -178,6 +181,8 @@ def load_settings() -> Settings:
     settings.trading.stop_loss_pct = _get_env_float('STOP_LOSS_PERCENT', -8.0)
     settings.trading.take_profit_pct = _get_env_float('TAKE_PROFIT_PERCENT', 20.0)
     settings.trading.max_holding_days = _get_env_int('MAX_HOLDING_DAYS', 30)
+    settings.trading.max_positions = _get_env_int('MAX_POSITIONS', 5)
+    settings.trading.position_size_pct = _get_env_float('POSITION_SIZE_PERCENT', 20.0)
 
     # 데이터 설정
     settings.data.analysis_period_days = _get_env_int('ANALYSIS_PERIOD_DAYS', 120)
@@ -204,6 +209,10 @@ def load_settings() -> Settings:
     settings.database.db_name = os.environ.get('DB_NAME', 'oneil_breakout')
     settings.database.db_user = os.environ.get('DB_USER', '')
     settings.database.db_password = os.environ.get('DB_PASSWORD', '')
+
+    # 파일 경로 설정
+    settings.watchlist_file = os.environ.get('WATCHLIST_FILE', 'watchlist.json')
+    settings.positions_file = os.environ.get('POSITIONS_FILE', 'positions.json')
 
     if env_loaded:
         print("✅ .env 파일에서 설정을 불러왔습니다.")

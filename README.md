@@ -43,19 +43,19 @@ TELEGRAM_CHAT_ID=your_chat_id
 ### 2. 봇 실행
 
 ```bash
-python -m oneil_breakout
+python -m kr_oneil_simple
 ```
 
 ### 3. 즉시 스캔
 
 ```bash
-python -m oneil_breakout scan
+python -m kr_oneil_simple scan
 ```
 
 ### 4. 백테스트
 
 ```bash
-python -m oneil_breakout backtest --capital 100000000
+python -m kr_oneil_simple backtest --capital 100000000
 ```
 
 ---
@@ -105,14 +105,14 @@ python -m oneil_breakout backtest --capital 100000000
 ### CLI로 실행
 
 ```bash
-python -m oneil_breakout backtest --capital 100000000
-python -m oneil_breakout backtest --start 2024-01-01 --end 2024-12-31
+python -m kr_oneil_simple backtest --capital 100000000
+python -m kr_oneil_simple backtest --start 2024-01-01 --end 2024-12-31
 ```
 
 ### Python API로 실행
 
 ```python
-from oneil_breakout import BacktestEngine
+from kr_oneil_simple import BacktestEngine
 
 engine = BacktestEngine(initial_capital=100_000_000)
 engine.run_portfolio_backtest(
@@ -154,7 +154,7 @@ STOP_LOSS_PERCENT=-7.5          # 손절 기준 (%)
 
 ```
 oneil-breakout/
-├── src/oneil_breakout/
+├── src/kr_oneil_simple/
 │   ├── __init__.py          # 패키지 진입점
 │   ├── __main__.py          # CLI
 │   ├── bot/detector.py      # 메인 봇 클래스
@@ -179,7 +179,7 @@ oneil-breakout/
 ## Python API
 
 ```python
-from oneil_breakout import (
+from kr_oneil_simple import (
     BreakoutDetector,
     BacktestEngine,
     Settings,

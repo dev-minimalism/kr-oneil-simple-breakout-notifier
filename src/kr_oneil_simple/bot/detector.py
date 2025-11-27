@@ -32,7 +32,8 @@ class BreakoutDetector:
         # 텔레그램 클라이언트
         self.telegram = TelegramClient(
             self.settings.telegram.token,
-            self.settings.telegram.chat_id
+            self.settings.telegram.chat_id,
+            self.settings.telegram.poll_timeout
         )
 
         # 워치리스트 관리자
