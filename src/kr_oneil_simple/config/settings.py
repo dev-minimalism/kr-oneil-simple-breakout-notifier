@@ -56,6 +56,25 @@ class DataSettings:
 
 
 @dataclass
+class DatabaseSettings:
+    """데이터베이스 설정"""
+    use_database: bool = False
+
+    # SSH 터널
+    ssh_host: str = ""
+    ssh_port: int = 22
+    ssh_user: str = ""
+    ssh_key_path: str = ""
+
+    # PostgreSQL
+    db_host: str = "localhost"
+    db_port: int = 5432
+    db_name: str = "oneil_breakout"
+    db_user: str = ""
+    db_password: str = ""
+
+
+@dataclass
 class WatchlistSettings:
     """워치리스트 기본값"""
     kr_stocks: List[str] = field(default_factory=lambda: [
@@ -77,6 +96,7 @@ class Settings:
     scan: ScanSettings = field(default_factory=ScanSettings)
     data: DataSettings = field(default_factory=DataSettings)
     watchlist: WatchlistSettings = field(default_factory=WatchlistSettings)
+    database: DatabaseSettings = field(default_factory=DatabaseSettings)
 
     # 파일 경로
     watchlist_file: str = "watchlist.json"
@@ -171,6 +191,19 @@ def load_settings() -> Settings:
         "096770", "009540", "010140"
     ]
     settings.watchlist.kr_stocks = _get_env_list('KR_WATCH_LIST', default_stocks)
+
+    # 데이터베이스 설정
+    use_db = os.environ.get('USE_DATABASE', 'false').lower()
+    settings.database.use_database = use_db in ('true', '1', 'yes')
+    settings.database.ssh_host = os.environ.get('SSH_HOST', '')
+    settings.database.ssh_port = _get_env_int('SSH_PORT', 22)
+    settings.database.ssh_user = os.environ.get('SSH_USER', '')
+    settings.database.ssh_key_path = os.environ.get('SSH_KEY_PATH', '')
+    settings.database.db_host = os.environ.get('DB_HOST', 'localhost')
+    settings.database.db_port = _get_env_int('DB_PORT', 5432)
+    settings.database.db_name = os.environ.get('DB_NAME', 'oneil_breakout')
+    settings.database.db_user = os.environ.get('DB_USER', '')
+    settings.database.db_password = os.environ.get('DB_PASSWORD', '')
 
     if env_loaded:
         print("✅ .env 파일에서 설정을 불러왔습니다.")
