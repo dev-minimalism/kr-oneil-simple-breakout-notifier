@@ -51,15 +51,15 @@ python -m kr_oneil_simple
 서버에서 봇을 백그라운드로 실행하려면 `nohup`을 사용합니다:
 
 ```bash
-# 백그라운드 실행
-nohup python -m kr_oneil_simple > bot.log 2>&1 &
+# 백그라운드 실행 (-u 옵션으로 버퍼링 없이 즉시 로그 기록)
+nohup python -u -m kr_oneil_simple > bot.log 2>&1 &
 
 # 날짜+시간 로그 파일명
-nohup python -m kr_oneil_simple > bot_$(date +%Y%m%d_%H%M%S).log 2>&1 &
+nohup python -u -m kr_oneil_simple > bot_$(date +%Y%m%d_%H%M%S).log 2>&1 &
 
 # logs 폴더에 저장 (권장)
 mkdir -p logs
-nohup python -m kr_oneil_simple > logs/bot_$(date +%Y%m%d).log 2>&1 &
+nohup python -u -m kr_oneil_simple > logs/bot_$(date +%Y%m%d).log 2>&1 &
 
 # 프로세스 ID 확인
 echo $!
