@@ -46,13 +46,69 @@ TELEGRAM_CHAT_ID=your_chat_id
 python -m kr_oneil_simple
 ```
 
-### 3. 즉시 스캔
+### 3. 백그라운드 실행 (서버)
+
+서버에서 봇을 백그라운드로 실행하려면 `nohup`을 사용합니다:
+
+```bash
+# 백그라운드 실행
+nohup python -m kr_oneil_simple > bot.log 2>&1 &
+
+# 프로세스 ID 확인
+echo $!
+
+# 또는 실행 중인 프로세스 확인
+ps aux | grep kr_oneil_simple
+
+# 로그 실시간 확인
+tail -f bot.log
+
+# 봇 종료
+pkill -f "python -m kr_oneil_simple"
+```
+
+**systemd 서비스로 등록 (권장)**
+
+`/etc/systemd/system/oneil-bot.service` 파일 생성:
+
+```ini
+[Unit]
+Description=William O'Neil Breakout Trading Bot
+After=network.target
+
+[Service]
+Type=simple
+User=your_username
+WorkingDirectory=/path/to/kr-oneil-simple-breakout-notifier
+Environment=PATH=/path/to/kr-oneil-simple-breakout-notifier/.venv/bin
+ExecStart=/path/to/kr-oneil-simple-breakout-notifier/.venv/bin/python -m kr_oneil_simple
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+# 서비스 등록 및 시작
+sudo systemctl daemon-reload
+sudo systemctl enable oneil-bot
+sudo systemctl start oneil-bot
+
+# 상태 확인
+sudo systemctl status oneil-bot
+
+# 로그 확인
+sudo journalctl -u oneil-bot -f
+```
+
+### 4. 즉시 스캔
 
 ```bash
 python -m kr_oneil_simple scan
 ```
 
-### 4. 백테스트
+### 5. 백테스트
 
 ```bash
 python -m kr_oneil_simple backtest --capital 100000000
@@ -65,12 +121,15 @@ python -m kr_oneil_simple backtest --capital 100000000
 | 명령어 | 설명 |
 |--------|------|
 | `/scan` | 즉시 스캔 |
-| `/positions` | 현재 포지션 보기 |
-| `/close CODE` | 포지션 수동 청산 |
+| `/list` | 감시 종목 목록 |
 | `/add CODE` | 종목 추가 |
 | `/remove CODE` | 종목 삭제 |
-| `/list` | 감시 종목 목록 |
+| `/positions` | 현재 포지션 보기 |
+| `/close CODE` | 포지션 수동 청산 |
+| `/trades` | 최근 거래 내역 (15건) |
+| `/stats` | 거래 통계 (승률, 수익률) |
 | `/status` | 시장 상태 확인 |
+| `/help` | 도움말 |
 
 ### 사용 예시
 
