@@ -367,23 +367,25 @@ class BreakoutDetector:
         tickers = self.watchlist.get_all()
 
         if not tickers:
+            print("⚠️  워치리스트가 비어있습니다.", flush=True)
             return signals
 
-        print("🇰🇷 한국 주식 스캔 중...\n")
+        total = len(tickers)
+        print(f"🇰🇷 한국 주식 스캔 중... ({total}개)\n", flush=True)
 
-        for ticker in tickers:
+        for i, ticker in enumerate(tickers, 1):
             try:
                 name = get_kr_stock_name(ticker)
-                print(f"  🔍 {name}({ticker})...", end=" ")
+                print(f"  [{i}/{total}] 🔍 {name}({ticker})...", end=" ", flush=True)
 
                 # 이미 포지션이 있으면 스킵
                 if self.positions.has_position(ticker):
-                    print("📍 포지션 보유중")
+                    print("📍 포지션 보유중", flush=True)
                     continue
 
                 # 오늘 이미 신호가 발생했으면 스킵 (중복 알림 방지)
                 if self.positions.has_signal_today(ticker):
-                    print("🔕 오늘 이미 알림 발송")
+                    print("🔕 오늘 이미 알림 발송", flush=True)
                     continue
 
                 stock_signals = self.analyze_stock(ticker)
@@ -408,14 +410,19 @@ class BreakoutDetector:
                             signal=signal
                         )
 
-                        print(f"✅ 신호!")
+                        print(f"✅ 신호!", flush=True)
                         time.sleep(2)
                 else:
-                    print("⚪")
-            except Exception as e:
-                print(f"❌ 오류: {e}")
-        print()
+                    print("⚪", flush=True)
 
+                # 종목 사이 짧은 딜레이 (API 부하 방지)
+                time.sleep(0.5)
+
+            except Exception as e:
+                print(f"❌ 오류: {e}", flush=True)
+                continue  # 에러 발생해도 다음 종목 계속 진행
+
+        print(flush=True)
         return signals
 
     def _print_scan_summary(self, signals: List[Dict]):
@@ -445,12 +452,25 @@ class BreakoutDetector:
 
         try:
             self.is_scanning = True
-            print(f"\n🔔 수동 스캔 명령어 수신 - 스캔 시작")
-            self.run_scan()
-            self.telegram.send_message(f"✅ 스캔 완료!")
+            print(f"\n🔔 수동 스캔 명령어 수신 - 스캔 시작", flush=True)
+
+            # 스캔 시작 알림
+            count = self.watchlist.count()
+            self.telegram.send_message(f"📊 {count}개 종목 스캔 중...")
+
+            signals = self.run_scan()
+
+            # 결과 알림
+            if signals:
+                self.telegram.send_message(f"✅ 스캔 완료! {len(signals)}개 신호 발견")
+            else:
+                self.telegram.send_message(f"✅ 스캔 완료! 신호 없음")
         except Exception as e:
-            print(f"❌ 스캔 중 오류: {e}")
-            self.telegram.send_message(f"❌ 스캔 중 오류가 발생했습니다: {str(e)}")
+            import traceback
+            error_msg = f"❌ 스캔 중 오류: {e}"
+            print(error_msg, flush=True)
+            print(traceback.format_exc(), flush=True)
+            self.telegram.send_message(error_msg)
         finally:
             self.is_scanning = False
             self.scan_lock.release()
