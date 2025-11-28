@@ -54,14 +54,21 @@ python -m kr_oneil_simple
 # 백그라운드 실행
 nohup python -m kr_oneil_simple > bot.log 2>&1 &
 
+# 날짜+시간 로그 파일명
+nohup python -m kr_oneil_simple > bot_$(date +%Y%m%d_%H%M%S).log 2>&1 &
+
+# logs 폴더에 저장 (권장)
+mkdir -p logs
+nohup python -m kr_oneil_simple > logs/bot_$(date +%Y%m%d).log 2>&1 &
+
 # 프로세스 ID 확인
 echo $!
 
-# 또는 실행 중인 프로세스 확인
+# 실행 중인 프로세스 확인
 ps aux | grep kr_oneil_simple
 
 # 로그 실시간 확인
-tail -f bot.log
+tail -f logs/bot_*.log
 
 # 봇 종료
 pkill -f "python -m kr_oneil_simple"
