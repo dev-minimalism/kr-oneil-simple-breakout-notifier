@@ -88,6 +88,7 @@ def run_backtest(args):
     """백테스트 실행"""
     from .backtest import BacktestEngine
     from datetime import datetime, timedelta
+    from pathlib import Path
 
     print("=" * 60)
     print("윌리엄 오닐 돌파매매 - 백테스트")
@@ -112,7 +113,12 @@ def run_backtest(args):
     )
 
     engine.print_performance_report()
-    engine.save_results('kr_backtest_results.csv')
+
+    # output 폴더에 결과 저장
+    output_dir = Path(__file__).parent.parent.parent.parent / 'output'
+    output_dir.mkdir(exist_ok=True)
+    output_file = output_dir / f'kr_backtest_results_{start_date}_{end_date}.csv'
+    engine.save_results(str(output_file))
 
 
 if __name__ == "__main__":
