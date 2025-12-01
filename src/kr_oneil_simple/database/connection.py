@@ -513,6 +513,87 @@ class DatabaseConnection:
             print(f"❌ 신호 목록 조회 실패: {e}")
         return signals
 
+    # ========================================
+    # Trade History & Statistics
+    # ========================================
+
+    def get_closed_positions(self, limit: int = 15) -> List[Position]:
+        """청산된 포지션 조회 (최근 거래 내역)"""
+        sql = """
+        SELECT id, ticker, name, entry_price, entry_date, exit_price, exit_date,
+               quantity, pattern, stop_loss, take_profit, status, profit_pct,
+               signal_data, created_at, updated_at
+        FROM positions
+        WHERE status != 'open'
+        ORDER BY exit_date DESC
+        LIMIT %s
+        """
+        positions = []
+        try:
+            with self.cursor() as cur:
+                cur.execute(sql, (limit,))
+                columns = [desc[0] for desc in cur.description]
+                for row in cur.fetchall():
+                    positions.append(Position.from_db_row(row, columns))
+        except Exception as e:
+            print(f"❌ 거래 내역 조회 실패: {e}")
+        return positions
+
+    def get_trade_stats(self) -> dict:
+        """거래 통계 조회"""
+        sql = """
+        SELECT
+            COUNT(*) as total_trades,
+            COUNT(CASE WHEN profit_pct > 0 THEN 1 END) as wins,
+            COUNT(CASE WHEN profit_pct <= 0 THEN 1 END) as losses,
+            COALESCE(AVG(profit_pct), 0) as avg_profit,
+            COALESCE(MAX(profit_pct), 0) as max_profit,
+            COALESCE(MIN(profit_pct), 0) as max_loss,
+            COALESCE(SUM(profit_pct), 0) as total_profit,
+            COUNT(CASE WHEN status = 'stop_loss' THEN 1 END) as stop_loss_count,
+            COUNT(CASE WHEN status = 'take_profit' THEN 1 END) as take_profit_count,
+            COUNT(CASE WHEN status = 'expired' THEN 1 END) as expired_count,
+            COUNT(CASE WHEN status = 'closed' THEN 1 END) as manual_close_count
+        FROM positions
+        WHERE status != 'open'
+        """
+        stats = {
+            'total_trades': 0,
+            'wins': 0,
+            'losses': 0,
+            'win_rate': 0.0,
+            'avg_profit': 0.0,
+            'max_profit': 0.0,
+            'max_loss': 0.0,
+            'total_profit': 0.0,
+            'stop_loss_count': 0,
+            'take_profit_count': 0,
+            'expired_count': 0,
+            'manual_close_count': 0,
+        }
+        try:
+            with self.cursor() as cur:
+                cur.execute(sql)
+                row = cur.fetchone()
+                if row:
+                    stats['total_trades'] = row[0] or 0
+                    stats['wins'] = row[1] or 0
+                    stats['losses'] = row[2] or 0
+                    stats['avg_profit'] = float(row[3] or 0)
+                    stats['max_profit'] = float(row[4] or 0)
+                    stats['max_loss'] = float(row[5] or 0)
+                    stats['total_profit'] = float(row[6] or 0)
+                    stats['stop_loss_count'] = row[7] or 0
+                    stats['take_profit_count'] = row[8] or 0
+                    stats['expired_count'] = row[9] or 0
+                    stats['manual_close_count'] = row[10] or 0
+
+                    if stats['total_trades'] > 0:
+                        stats['win_rate'] = (stats['wins'] / stats['total_trades']) * 100
+        except Exception as e:
+            print(f"❌ 통계 조회 실패: {e}")
+        return stats
+
     def __enter__(self):
         self.connect()
         return self

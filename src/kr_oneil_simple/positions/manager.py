@@ -67,6 +67,16 @@ class BasePositionManager(ABC):
         """신호 기록"""
         pass
 
+    @abstractmethod
+    def get_trades(self, limit: int = 15) -> List[Dict]:
+        """최근 거래 내역 조회"""
+        pass
+
+    @abstractmethod
+    def get_stats(self) -> Dict:
+        """거래 통계 조회"""
+        pass
+
     def calculate_stop_loss(self, entry_price: float) -> float:
         """손절가 계산"""
         return entry_price * (1 + self.stop_loss_pct / 100)
@@ -298,6 +308,19 @@ class DatabasePositionManager(BasePositionManager):
         result = self.db.add_signal(signal_obj)
         return result is not None
 
+    def get_trades(self, limit: int = 15) -> List[Dict]:
+        """최근 거래 내역 조회"""
+        if not self.connect():
+            return []
+        positions = self.db.get_closed_positions(limit)
+        return [p.to_dict() for p in positions]
+
+    def get_stats(self) -> Dict:
+        """거래 통계 조회"""
+        if not self.connect():
+            return {}
+        return self.db.get_trade_stats()
+
 
 class JsonPositionManager(BasePositionManager):
     """JSON 파일 기반 포지션 관리자 (기존 방식)"""
@@ -418,6 +441,23 @@ class JsonPositionManager(BasePositionManager):
         self.signals[ticker] = today
         return self._save_signals()
 
+    def get_trades(self, limit: int = 15) -> List[Dict]:
+        """최근 거래 내역 조회 (JSON 모드에서는 미지원)"""
+        return []
+
+    def get_stats(self) -> Dict:
+        """거래 통계 조회 (JSON 모드에서는 미지원)"""
+        return {
+            'total_trades': 0,
+            'wins': 0,
+            'losses': 0,
+            'win_rate': 0.0,
+            'avg_profit': 0.0,
+            'max_profit': 0.0,
+            'max_loss': 0.0,
+            'total_profit': 0.0,
+        }
+
 
 class PositionManager(BasePositionManager):
     """포지션 관리자 - 설정에 따라 DB 또는 JSON 사용"""
@@ -471,6 +511,12 @@ class PositionManager(BasePositionManager):
 
     def record_signal(self, signal: Dict) -> bool:
         return self._manager.record_signal(signal)
+
+    def get_trades(self, limit: int = 15) -> List[Dict]:
+        return self._manager.get_trades(limit)
+
+    def get_stats(self) -> Dict:
+        return self._manager.get_stats()
 
     def calculate_profit_from_position(self, position: Dict, current_price: float) -> tuple[float, int]:
         """수익률과 보유일수 계산"""
