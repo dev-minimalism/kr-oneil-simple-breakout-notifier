@@ -392,17 +392,11 @@ class BreakoutDetector:
 
                 if stock_signals:
                     for signal in stock_signals:
-                        signals.append(signal)
-
-                        # 신호 기록 (중복 방지용)
+                        # 먼저 신호 기록 (중복 방지용) - 이 시점에서 DB에 기록
                         self.positions.record_signal(signal)
 
-                        # 텔레그램 알림
-                        msg = format_signal_message(signal)
-                        self.telegram.send_message(msg)
-
-                        # 포지션 자동 추가
-                        self.positions.add(
+                        # 포지션 추가 시도 (이미 있으면 실패)
+                        added = self.positions.add(
                             ticker=ticker,
                             name=name,
                             entry_price=signal['current_price'],
@@ -410,8 +404,18 @@ class BreakoutDetector:
                             signal=signal
                         )
 
-                        print(f"✅ 신호!", flush=True)
-                        time.sleep(2)
+                        # 포지션이 성공적으로 추가된 경우에만 알림 발송
+                        if added:
+                            signals.append(signal)
+
+                            # 텔레그램 알림
+                            msg = format_signal_message(signal)
+                            self.telegram.send_message(msg)
+
+                            print(f"✅ 신호!", flush=True)
+                            time.sleep(2)
+                        else:
+                            print(f"⚠️ 포지션 추가 실패 (이미 존재)", flush=True)
                 else:
                     print("⚪", flush=True)
 

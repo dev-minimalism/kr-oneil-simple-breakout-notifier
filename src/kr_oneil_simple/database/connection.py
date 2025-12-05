@@ -183,6 +183,10 @@ class DatabaseConnection:
     CREATE INDEX IF NOT EXISTS idx_signals_signal_date ON signals(signal_date);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_signals_ticker_date ON signals(ticker, signal_date);
 
+    -- 같은 ticker에 대해 open 상태 포지션은 하나만 허용 (중복 방지)
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_positions_ticker_open
+        ON positions(ticker) WHERE status = 'open';
+
     -- updated_at 트리거
     CREATE OR REPLACE FUNCTION update_updated_at_column()
     RETURNS TRIGGER AS $$
@@ -310,7 +314,12 @@ class DatabaseConnection:
     # ========================================
 
     def add_position(self, position: Position) -> Optional[int]:
-        """포지션 추가"""
+        """포지션 추가 (이미 열린 포지션이 있으면 추가하지 않음)"""
+        # 먼저 열린 포지션이 있는지 확인
+        if self.has_open_position(position.ticker):
+            print(f"⚠️ 이미 열린 포지션 존재: {position.ticker}")
+            return None
+
         sql = """
         INSERT INTO positions (
             ticker, name, entry_price, entry_date, quantity, pattern,
