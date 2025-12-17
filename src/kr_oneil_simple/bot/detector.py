@@ -16,6 +16,7 @@ from ..telegram.formatter import (
     format_close_position_message,
     format_no_signal_message
 )
+from ..database import PositionStatus
 
 
 class BreakoutDetector:
@@ -31,7 +32,8 @@ class BreakoutDetector:
         # 텔레그램 클라이언트
         self.telegram = TelegramClient(
             self.settings.telegram.token,
-            self.settings.telegram.chat_id
+            self.settings.telegram.chat_id,
+            self.settings.telegram.poll_timeout
         )
 
         # 워치리스트 관리자
@@ -40,12 +42,13 @@ class BreakoutDetector:
             self.settings.watchlist.kr_stocks
         )
 
-        # 포지션 관리자
+        # 포지션 관리자 (DB 설정에 따라 DB 또는 JSON 사용)
         self.positions = PositionManager(
             self.settings.positions_file,
             self.settings.trading.stop_loss_pct,
             self.settings.trading.take_profit_pct,
-            self.settings.trading.max_holding_days
+            self.settings.trading.max_holding_days,
+            db_settings=self.settings.database
         )
 
         # 스캔 락
@@ -103,6 +106,12 @@ class BreakoutDetector:
                 return "❌ 사용법: /close [종목코드]\n예: /close 005930"
             return self._close_position_command(parts[1])
 
+        elif command == '/trades':
+            return self._get_trades_message()
+
+        elif command == '/stats':
+            return self._get_stats_message()
+
         return None
 
     def _get_help_message(self) -> str:
@@ -110,24 +119,25 @@ class BreakoutDetector:
         return """
 🤖 <b>윌리엄 오닐 돌파매매 봇 명령어</b>
 
-<b>즉시 스캔:</b>
+<b>스캔:</b>
 /scan - 즉시 스캔
+
+<b>감시 종목:</b>
+/list - 현재 감시 종목 보기
+/add [종목코드] - 종목 추가
+/remove [종목코드] - 종목 삭제
 
 <b>포지션 관리:</b>
 /positions - 현재 보유 포지션 보기
 /close [종목코드] - 포지션 수동 청산
-  예: /close 005930
 
-<b>종목 관리:</b>
-/add [종목코드] - 종목 추가
-  예: /add 005930
+<b>거래 내역:</b>
+/trades - 최근 거래 내역 (최대 15건)
+/stats - 거래 통계 (승률, 평균수익률 등)
 
-/remove [종목코드] - 종목 삭제
-  예: /remove 005930
-
-/list - 현재 감시 종목 보기
-
+<b>상태:</b>
 /status - 시장 상태 확인
+/help - 도움말
 
 <b>팁:</b>
 • 매수 신호 발생 시 자동으로 포지션 추적
@@ -151,6 +161,82 @@ class BreakoutDetector:
         except Exception as e:
             return f"❌ 청산 중 오류: {e}"
 
+    def _get_trades_message(self) -> str:
+        """최근 거래 내역 메시지"""
+        trades = self.positions.get_trades(15)
+        if not trades:
+            return "📜 <b>최근 거래 내역</b>\n\n거래 내역이 없습니다."
+
+        msg = f"📜 <b>최근 거래 내역</b> ({len(trades)}건)\n\n"
+
+        for i, trade in enumerate(trades, 1):
+            ticker = trade['ticker']
+            name = trade.get('name', ticker)
+            entry_price = trade.get('entry_price', 0)
+            exit_price = trade.get('exit_price', 0)
+            profit_pct = trade.get('profit_pct', 0)
+            status = trade.get('status', '')
+            exit_date = trade.get('exit_date', '')
+
+            # 상태 아이콘
+            if status == 'take_profit':
+                icon = "🎯"
+                status_text = "익절"
+            elif status == 'stop_loss':
+                icon = "🛑"
+                status_text = "손절"
+            elif status == 'expired':
+                icon = "⏰"
+                status_text = "만료"
+            else:
+                icon = "📤"
+                status_text = "청산"
+
+            # 수익률 포맷
+            profit_icon = "📈" if profit_pct > 0 else "📉"
+
+            # 날짜 포맷
+            if isinstance(exit_date, datetime):
+                date_str = exit_date.strftime('%m/%d')
+            elif exit_date:
+                date_str = str(exit_date)[:10]
+            else:
+                date_str = "-"
+
+            msg += f"{i}. {icon} <b>{name}</b> ({ticker})\n"
+            msg += f"   {entry_price:,.0f} → {exit_price:,.0f}원 {profit_icon}{profit_pct:+.2f}%\n"
+            msg += f"   {status_text} | {date_str}\n\n"
+
+        return msg
+
+    def _get_stats_message(self) -> str:
+        """거래 통계 메시지"""
+        stats = self.positions.get_stats()
+
+        if stats.get('total_trades', 0) == 0:
+            return "📊 <b>거래 통계</b>\n\n거래 기록이 없습니다."
+
+        msg = f"""📊 <b>거래 통계</b>
+
+<b>전체 성과</b>
+총 거래: {stats['total_trades']}건
+승/패: {stats['wins']}승 {stats['losses']}패
+승률: {stats['win_rate']:.1f}%
+
+<b>수익률</b>
+평균: {stats['avg_profit']:+.2f}%
+최대 수익: {stats['max_profit']:+.2f}%
+최대 손실: {stats['max_loss']:+.2f}%
+누적: {stats['total_profit']:+.2f}%
+
+<b>청산 유형</b>
+🎯 익절: {stats.get('take_profit_count', 0)}건
+🛑 손절: {stats.get('stop_loss_count', 0)}건
+⏰ 만료: {stats.get('expired_count', 0)}건
+📤 수동: {stats.get('manual_close_count', 0)}건
+"""
+        return msg
+
     def _get_current_price(self, ticker: str) -> float | None:
         """현재가 조회"""
         df = get_kr_stock_data(ticker, days=7)
@@ -164,11 +250,11 @@ class BreakoutDetector:
 
     def _close_position(self, position: Dict, exit_price: float, reason: str):
         """포지션 청산 처리"""
-        profit_pct, holding_days = self.positions.calculate_profit(position, exit_price)
+        profit_pct, holding_days = self.positions.calculate_profit_from_position(position, exit_price)
 
         msg = format_close_position_message(
             position['ticker'],
-            position['pattern'],
+            position.get('pattern', ''),
             position['entry_price'],
             exit_price,
             profit_pct,
@@ -176,7 +262,7 @@ class BreakoutDetector:
             reason
         )
         self.telegram.send_message(msg)
-        self.positions.remove(position['ticker'])
+        self.positions.close_position(position['ticker'], exit_price, reason)
         print(f"  ❌ 포지션 청산: {position['ticker']} ({reason}) {profit_pct:+.2f}%")
 
     def check_positions(self):
@@ -188,15 +274,16 @@ class BreakoutDetector:
 
         for pos in self.positions.get_all():
             ticker = pos['ticker']
+            name = pos.get('name', ticker)
             try:
                 current_price = self._get_current_price(ticker)
                 if current_price is None:
                     continue
 
-                profit_pct, holding_days = self.positions.calculate_profit(pos, current_price)
-                print(f"  🔍 {ticker}: {current_price:,.2f} ({profit_pct:+.2f}%)", end="")
+                profit_pct, holding_days = self.positions.calculate_profit_from_position(pos, current_price)
+                print(f"  🔍 {name}({ticker}): {current_price:,.0f}원 ({profit_pct:+.2f}%)", end="")
 
-                should_exit, exit_price, reason = self.positions.check_exit_conditions(pos, current_price)
+                should_exit, exit_price, reason, _ = self.positions.check_exit_conditions(pos, current_price)
                 if should_exit:
                     print(f" ⚠️ {reason}!")
                     self._close_position(pos, exit_price, reason)
@@ -221,7 +308,7 @@ class BreakoutDetector:
         signals = []
         stock_name = get_kr_stock_name(ticker)
         pivot_signal = detect_pivot_breakout(
-            df, ticker, 'KR', stock_name,
+            df, ticker, stock_name,
             volume_surge_min=self.settings.pattern.volume_surge_min,
             breakout_max=self.settings.pattern.breakout_max
         )
@@ -243,7 +330,7 @@ class BreakoutDetector:
         print(f"{'=' * 60}\n")
 
         signals = self._scan_stocks()
-        self._print_scan_summary(signals)
+        self._print_scan_summary(signals, send_no_signal_msg=True)
         return signals
 
     def run_smart_scan(self) -> List[Dict]:
@@ -255,7 +342,7 @@ class BreakoutDetector:
         market_status = get_market_status()
 
         print(f"\n{'=' * 60}")
-        print(f"🔍 윌리엄 오닐 스마트 스캔")
+        print(f"🔍 윌리엄 오닐 simple 한국장 스캔")
         print(f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
         if not market_status['kr']:
@@ -275,54 +362,90 @@ class BreakoutDetector:
         return signals
 
     def _scan_stocks(self) -> List[Dict]:
-        """한국 주식 스캔"""
+        """한국 주식 스캔 (중복 알림 방지 포함)"""
         signals = []
         tickers = self.watchlist.get_all()
 
         if not tickers:
+            print("⚠️  워치리스트가 비어있습니다.", flush=True)
             return signals
 
-        print("🇰🇷 한국 주식 스캔 중...\n")
+        total = len(tickers)
+        print(f"🇰🇷 한국 주식 스캔 중... ({total}개)\n", flush=True)
 
-        for ticker in tickers:
+        for i, ticker in enumerate(tickers, 1):
             try:
                 name = get_kr_stock_name(ticker)
-                print(f"  🔍 {name}({ticker})...", end=" ")
+                print(f"  [{i}/{total}] 🔍 {name}({ticker})...", end=" ", flush=True)
+
+                # 이미 포지션이 있으면 스킵
+                if self.positions.has_position(ticker):
+                    print("📍 포지션 보유중", flush=True)
+                    continue
+
+                # 오늘 이미 신호가 발생했으면 스킵 (중복 알림 방지)
+                if self.positions.has_signal_today(ticker):
+                    print("🔕 오늘 이미 알림 발송", flush=True)
+                    continue
+
                 stock_signals = self.analyze_stock(ticker)
 
                 if stock_signals:
                     for signal in stock_signals:
-                        signals.append(signal)
-                        msg = format_signal_message(signal)
-                        self.telegram.send_message(msg)
+                        # 먼저 신호 기록 (중복 방지용) - 이 시점에서 DB에 기록
+                        self.positions.record_signal(signal)
 
-                        # 포지션 자동 추가
-                        if not self.positions.has_position(ticker):
-                            self.positions.add(
-                                ticker=ticker,
-                                entry_price=signal['current_price'],
-                                pattern=signal['pattern'],
-                                signal=signal
-                            )
+                        # 포지션 추가 시도 (이미 있으면 실패)
+                        added = self.positions.add(
+                            ticker=ticker,
+                            name=name,
+                            entry_price=signal['current_price'],
+                            pattern=signal['pattern'],
+                            signal=signal
+                        )
 
-                        print(f"✅ 신호!")
-                        time.sleep(2)
+                        # 포지션이 성공적으로 추가된 경우에만 알림 발송
+                        if added:
+                            signals.append(signal)
+
+                            # 신호에 포지션 오픈 완료 표시
+                            self.positions.mark_position_opened(ticker)
+
+                            # 텔레그램 알림
+                            msg = format_signal_message(signal)
+                            self.telegram.send_message(msg)
+
+                            print(f"✅ 신호!", flush=True)
+                            time.sleep(2)
+                        else:
+                            print(f"⚠️ 포지션 추가 실패 (이미 존재)", flush=True)
                 else:
-                    print("⚪")
-            except Exception:
-                print(f"❌ 오류")
-        print()
+                    print("⚪", flush=True)
 
+                # 종목 사이 짧은 딜레이 (API 부하 방지)
+                time.sleep(0.5)
+
+            except Exception as e:
+                print(f"❌ 오류: {e}", flush=True)
+                continue  # 에러 발생해도 다음 종목 계속 진행
+
+        print(flush=True)
         return signals
 
-    def _print_scan_summary(self, signals: List[Dict]):
-        """스캔 결과 요약 출력"""
+    def _print_scan_summary(self, signals: List[Dict], send_no_signal_msg: bool = False):
+        """스캔 결과 요약 출력
+
+        Args:
+            signals: 발견된 신호 목록
+            send_no_signal_msg: 신호 없을 때 텔레그램 메시지 전송 여부 (수동 스캔 시 True)
+        """
         if signals:
             print(f"📊 {len(signals)}개 신호 발견")
         else:
             print("⚪ 신호 없음")
-            msg = format_no_signal_message(self.watchlist.count())
-            self.telegram.send_message(msg)
+            if send_no_signal_msg:
+                msg = format_no_signal_message(self.watchlist.count())
+                self.telegram.send_message(msg)
 
         print(f"\n{'=' * 60}\n")
 
@@ -342,12 +465,25 @@ class BreakoutDetector:
 
         try:
             self.is_scanning = True
-            print(f"\n🔔 수동 스캔 명령어 수신 - 스캔 시작")
-            self.run_scan()
-            self.telegram.send_message(f"✅ 스캔 완료!")
+            print(f"\n🔔 수동 스캔 명령어 수신 - 스캔 시작", flush=True)
+
+            # 스캔 시작 알림
+            count = self.watchlist.count()
+            self.telegram.send_message(f"📊 {count}개 종목 스캔 중...")
+
+            signals = self.run_scan()
+
+            # 결과 알림
+            if signals:
+                self.telegram.send_message(f"✅ 스캔 완료! {len(signals)}개 신호 발견")
+            else:
+                self.telegram.send_message(f"✅ 스캔 완료! 신호 없음")
         except Exception as e:
-            print(f"❌ 스캔 중 오류: {e}")
-            self.telegram.send_message(f"❌ 스캔 중 오류가 발생했습니다: {str(e)}")
+            import traceback
+            error_msg = f"❌ 스캔 중 오류: {e}"
+            print(error_msg, flush=True)
+            print(traceback.format_exc(), flush=True)
+            self.telegram.send_message(error_msg)
         finally:
             self.is_scanning = False
             self.scan_lock.release()

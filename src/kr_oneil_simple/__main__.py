@@ -2,9 +2,9 @@
 윌리엄 오닐 돌파매매 봇 CLI 진입점
 
 사용법:
-    python -m oneil_breakout          # 봇 실행
-    python -m oneil_breakout backtest # 백테스트 실행
-    python -m oneil_breakout scan     # 즉시 스캔 (1회)
+    python -m kr_oneil_simple          # 봇 실행
+    python -m kr_oneil_simple backtest # 백테스트 실행
+    python -m kr_oneil_simple scan     # 즉시 스캔 (1회)
 """
 import argparse
 import sys
@@ -20,9 +20,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 예제:
-    python -m oneil_breakout              # 봇 실행
-    python -m oneil_breakout backtest     # 백테스트 실행
-    python -m oneil_breakout scan         # 즉시 1회 스캔
+    python -m kr_oneil_simple              # 봇 실행
+    python -m kr_oneil_simple backtest     # 백테스트 실행
+    python -m kr_oneil_simple scan         # 즉시 1회 스캔
 """
     )
 
@@ -88,6 +88,7 @@ def run_backtest(args):
     """백테스트 실행"""
     from .backtest import BacktestEngine
     from datetime import datetime, timedelta
+    from pathlib import Path
 
     print("=" * 60)
     print("윌리엄 오닐 돌파매매 - 백테스트")
@@ -112,7 +113,12 @@ def run_backtest(args):
     )
 
     engine.print_performance_report()
-    engine.save_results('kr_backtest_results.csv')
+
+    # output 폴더에 결과 저장
+    output_dir = Path(__file__).parent.parent.parent.parent / 'output'
+    output_dir.mkdir(exist_ok=True)
+    output_file = output_dir / f'kr_backtest_results_{start_date}_{end_date}.csv'
+    engine.save_results(str(output_file))
 
 
 if __name__ == "__main__":

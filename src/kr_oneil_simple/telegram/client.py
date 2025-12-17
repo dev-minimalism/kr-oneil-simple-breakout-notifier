@@ -5,16 +5,18 @@ import requests
 class TelegramClient:
     """텔레그램 API 클라이언트"""
 
-    def __init__(self, token: str, chat_id: str):
+    def __init__(self, token: str, chat_id: str, poll_timeout: int = 30):
         """
         Args:
             token: 텔레그램 봇 토큰
             chat_id: 텔레그램 채팅 ID
+            poll_timeout: 롱 폴링 타임아웃 (초)
         """
         self.token = token
         self.chat_id = chat_id
         self.base_url = f"https://api.telegram.org/bot{token}"
         self.last_update_id = 0
+        self.poll_timeout = poll_timeout
 
     def send_message(self, message: str) -> bool:
         """
@@ -43,12 +45,9 @@ class TelegramClient:
             print(f"❌ 텔레그램 전송 오류: {e}")
             return False
 
-    def get_updates(self, timeout: int = 10) -> list:
+    def get_updates(self) -> list:
         """
-        텔레그램 업데이트 확인
-
-        Args:
-            timeout: 롱 폴링 타임아웃 (초)
+        텔레그램 업데이트 확인 (롱 폴링)
 
         Returns:
             업데이트 리스트
@@ -57,9 +56,10 @@ class TelegramClient:
             url = f"{self.base_url}/getUpdates"
             params = {
                 'offset': self.last_update_id + 1,
-                'timeout': timeout
+                'timeout': self.poll_timeout
             }
-            response = requests.get(url, params=params, timeout=timeout + 5)
+            # requests timeout은 롱 폴링보다 여유있게 설정
+            response = requests.get(url, params=params, timeout=self.poll_timeout + 10)
 
             if response.status_code == 200:
                 data = response.json()
