@@ -330,7 +330,7 @@ class BreakoutDetector:
         print(f"{'=' * 60}\n")
 
         signals = self._scan_stocks()
-        self._print_scan_summary(signals)
+        self._print_scan_summary(signals, send_no_signal_msg=True)
         return signals
 
     def run_smart_scan(self) -> List[Dict]:
@@ -408,6 +408,9 @@ class BreakoutDetector:
                         if added:
                             signals.append(signal)
 
+                            # 신호에 포지션 오픈 완료 표시
+                            self.positions.mark_position_opened(ticker)
+
                             # 텔레그램 알림
                             msg = format_signal_message(signal)
                             self.telegram.send_message(msg)
@@ -429,14 +432,20 @@ class BreakoutDetector:
         print(flush=True)
         return signals
 
-    def _print_scan_summary(self, signals: List[Dict]):
-        """스캔 결과 요약 출력"""
+    def _print_scan_summary(self, signals: List[Dict], send_no_signal_msg: bool = False):
+        """스캔 결과 요약 출력
+
+        Args:
+            signals: 발견된 신호 목록
+            send_no_signal_msg: 신호 없을 때 텔레그램 메시지 전송 여부 (수동 스캔 시 True)
+        """
         if signals:
             print(f"📊 {len(signals)}개 신호 발견")
         else:
             print("⚪ 신호 없음")
-            msg = format_no_signal_message(self.watchlist.count())
-            self.telegram.send_message(msg)
+            if send_no_signal_msg:
+                msg = format_no_signal_message(self.watchlist.count())
+                self.telegram.send_message(msg)
 
         print(f"\n{'=' * 60}\n")
 

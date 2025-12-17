@@ -501,6 +501,21 @@ class DatabaseConnection:
             print(f"❌ 신호 업데이트 실패: {e}")
         return False
 
+    def mark_signal_position_opened(self, ticker: str) -> bool:
+        """신호에 포지션 오픈 완료 표시"""
+        sql = """
+        UPDATE signals
+        SET position_opened = TRUE
+        WHERE ticker = %s AND signal_date = CURRENT_DATE
+        """
+        try:
+            with self.cursor() as cur:
+                cur.execute(sql, (ticker,))
+                return cur.rowcount > 0
+        except Exception as e:
+            print(f"❌ 신호 position_opened 업데이트 실패: {e}")
+        return False
+
     def get_recent_signals(self, days: int = 7) -> List[Signal]:
         """최근 신호 조회"""
         sql = """

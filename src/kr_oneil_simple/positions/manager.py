@@ -321,6 +321,12 @@ class DatabasePositionManager(BasePositionManager):
             return {}
         return self.db.get_trade_stats()
 
+    def mark_position_opened(self, ticker: str) -> bool:
+        """신호에 포지션 오픈 완료 표시"""
+        if not self.connect():
+            return False
+        return self.db.mark_signal_position_opened(ticker)
+
 
 class JsonPositionManager(BasePositionManager):
     """JSON 파일 기반 포지션 관리자 (기존 방식)"""
@@ -458,6 +464,10 @@ class JsonPositionManager(BasePositionManager):
             'total_profit': 0.0,
         }
 
+    def mark_position_opened(self, ticker: str) -> bool:
+        """신호에 포지션 오픈 완료 표시 (JSON 모드에서는 미지원)"""
+        return True
+
 
 class PositionManager(BasePositionManager):
     """포지션 관리자 - 설정에 따라 DB 또는 JSON 사용"""
@@ -517,6 +527,9 @@ class PositionManager(BasePositionManager):
 
     def get_stats(self) -> Dict:
         return self._manager.get_stats()
+
+    def mark_position_opened(self, ticker: str) -> bool:
+        return self._manager.mark_position_opened(ticker)
 
     def calculate_profit_from_position(self, position: Dict, current_price: float) -> tuple[float, int]:
         """수익률과 보유일수 계산"""
