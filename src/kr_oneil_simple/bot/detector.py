@@ -116,7 +116,8 @@ class BreakoutDetector:
 
     def _get_help_message(self) -> str:
         """도움말 메시지"""
-        return """
+        trading = self.settings.trading
+        return f"""
 🤖 <b>윌리엄 오닐 돌파매매 봇 명령어</b>
 
 <b>스캔:</b>
@@ -141,7 +142,7 @@ class BreakoutDetector:
 
 <b>팁:</b>
 • 매수 신호 발생 시 자동으로 포지션 추적
-• 손절(-8%), 익절(+20%), 30일 만료 시 알림
+• 손절({trading.stop_loss_pct}%), 익절(+{trading.take_profit_pct}%), {trading.max_holding_days}일 만료 시 알림
 • 장 시간 (09:00-15:30) 자동 스캔
 """
 

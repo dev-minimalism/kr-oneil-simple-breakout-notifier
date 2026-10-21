@@ -63,8 +63,9 @@ def run_bot():
     if not settings.telegram.token or settings.telegram.token == "YOUR_BOT_TOKEN_HERE":
         print("\n⚠️  텔레그램 설정이 필요합니다!")
         print("\n설정 방법:")
-        print("  1. config.py 파일에서 TELEGRAM_TOKEN과 CHAT_ID 설정")
-        print("  2. 또는 환경변수로 설정:")
+        print("  1. .env.example을 .env로 복사: cp .env.example .env")
+        print("  2. .env 파일에서 TELEGRAM_TOKEN과 TELEGRAM_CHAT_ID 설정")
+        print("  3. 또는 환경변수로 설정:")
         print("     export TELEGRAM_TOKEN='your_token'")
         print("     export TELEGRAM_CHAT_ID='your_chat_id'")
         sys.exit(1)
