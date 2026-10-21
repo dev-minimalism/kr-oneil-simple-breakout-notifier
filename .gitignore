@@ -27,6 +27,8 @@ config.py
 # Runtime data
 watchlist.json
 positions.json
+signals.json
+output/
 *.csv
 
 # OS
@@ -35,3 +37,4 @@ Thumbs.db
 
 # Logs
 *.log
+.env

@@ -2,9 +2,9 @@
 윌리엄 오닐 돌파매매 봇 CLI 진입점
 
 사용법:
-    python -m oneil_breakout          # 봇 실행
-    python -m oneil_breakout backtest # 백테스트 실행
-    python -m oneil_breakout scan     # 즉시 스캔 (1회)
+    python -m kr_oneil_simple          # 봇 실행
+    python -m kr_oneil_simple backtest # 백테스트 실행
+    python -m kr_oneil_simple scan     # 즉시 스캔 (1회)
 """
 import argparse
 import sys
@@ -20,9 +20,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 예제:
-    python -m oneil_breakout              # 봇 실행
-    python -m oneil_breakout backtest     # 백테스트 실행
-    python -m oneil_breakout scan         # 즉시 1회 스캔
+    python -m kr_oneil_simple              # 봇 실행
+    python -m kr_oneil_simple backtest     # 백테스트 실행
+    python -m kr_oneil_simple scan         # 즉시 1회 스캔
 """
     )
 
@@ -63,8 +63,9 @@ def run_bot():
     if not settings.telegram.token or settings.telegram.token == "YOUR_BOT_TOKEN_HERE":
         print("\n⚠️  텔레그램 설정이 필요합니다!")
         print("\n설정 방법:")
-        print("  1. config.py 파일에서 TELEGRAM_TOKEN과 CHAT_ID 설정")
-        print("  2. 또는 환경변수로 설정:")
+        print("  1. .env.example을 .env로 복사: cp .env.example .env")
+        print("  2. .env 파일에서 TELEGRAM_TOKEN과 TELEGRAM_CHAT_ID 설정")
+        print("  3. 또는 환경변수로 설정:")
         print("     export TELEGRAM_TOKEN='your_token'")
         print("     export TELEGRAM_CHAT_ID='your_chat_id'")
         sys.exit(1)
@@ -88,6 +89,7 @@ def run_backtest(args):
     """백테스트 실행"""
     from .backtest import BacktestEngine
     from datetime import datetime, timedelta
+    from pathlib import Path
 
     print("=" * 60)
     print("윌리엄 오닐 돌파매매 - 백테스트")
@@ -112,7 +114,12 @@ def run_backtest(args):
     )
 
     engine.print_performance_report()
-    engine.save_results('kr_backtest_results.csv')
+
+    # output 폴더에 결과 저장
+    output_dir = Path(__file__).parent.parent.parent.parent / 'output'
+    output_dir.mkdir(exist_ok=True)
+    output_file = output_dir / f'kr_backtest_results_{start_date}_{end_date}.csv'
+    engine.save_results(str(output_file))
 
 
 if __name__ == "__main__":

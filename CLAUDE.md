@@ -4,122 +4,73 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-William O'Neil Breakout Trading Bot (윌리엄 오닐 돌파매매 봇) - An automated trading signal detection system for **Korean stocks only** that identifies chart breakout patterns (Cup-and-Handle, Pivot Point Breakout, Base Breakout) using the CAN SLIM strategy framework.
+William O'Neil Breakout Trading Bot (윌리엄 오닐 돌파매매 봇) — a signal notifier for **Korean stocks only** that detects breakout patterns (CAN SLIM style), sends Telegram alerts, and tracks "virtual" positions with stop-loss / take-profit / max-holding-days exits. It does not place real orders.
 
-**Stack:** Python 3.12+, pykrx (Korean stocks), Telegram Bot API
+**Stack:** Python 3.12+, pykrx (KRX market data), Telegram Bot API (raw `requests`), JSON files or PostgreSQL over an SSH tunnel. Code comments, log output, and Telegram messages are in Korean — keep new user-facing strings in Korean.
 
-## Common Commands
+## Commands
 
 ```bash
-# Setup
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+cp .env.example .env      # set TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
 
-# Configure (copy and edit .env)
-cp .env.example .env
-# Edit .env with your TELEGRAM_TOKEN and TELEGRAM_CHAT_ID
+python -m kr_oneil_simple                 # main bot loop (same as `run`)
+python -m kr_oneil_simple scan            # one-off scan (still sends Telegram alerts and writes positions)
+python -m kr_oneil_simple backtest --start 2024-01-01 --end 2024-12-31 --capital 100000000
 
-# Run the main trading bot
-python -m oneil_breakout
+# Diagnostics for "why didn't a signal fire?" (run from repo root, see scripts/README.md)
+python scripts/check_realtime_data.py      # does pykrx return today's bar intraday?
+python scripts/check_signal_conditions.py  # per-ticker pass/fail of each pivot condition right now
+python scripts/check_backtest_signals.py   # dates in the last 3 weeks where signals should have fired
 
-# Run single scan
-python -m oneil_breakout scan
-
-# Run backtests
-python -m oneil_breakout backtest --capital 100000000
-python -m oneil_breakout backtest --start 2024-01-01 --end 2024-12-31
-
-# Dev tools (if installed with pip install -e ".[dev]")
-pytest                    # Run tests
-black src/                # Format code
-ruff check src/           # Lint
-mypy src/                 # Type check
+black src/ && ruff check src/ && mypy src/
 ```
+
+**Tests:** there is no `tests/` directory yet. `pyproject.toml` sets `testpaths = ["tests"]` and `--cov=oneil_breakout` (an old package name; the real package is `kr_oneil_simple`). Fix the `--cov` target when you add tests. To run a single test: `pytest tests/test_x.py::test_name`.
 
 ## Architecture
 
-### Package Structure (`src/oneil_breakout/`)
+`BreakoutDetector` (`bot/detector.py`) is the orchestrator: it owns the `TelegramClient`, `WatchlistManager`, `PositionManager`, and the scan loop.
 
-```
-src/oneil_breakout/
-├── __init__.py          # Package exports
-├── __main__.py          # CLI entry point
-├── bot/detector.py      # BreakoutDetector - main bot class
-├── backtest/engine.py   # BacktestEngine - backtesting
-├── config/settings.py   # Settings dataclasses + load_settings()
-├── data/kr_stock.py     # pykrx wrapper for Korean stocks
-├── patterns/pivot.py    # Pivot breakout detection
-├── positions/manager.py # Position tracking with stop-loss/take-profit
-├── watchlist/manager.py # Dynamic watchlist with JSON persistence
-├── market/status.py     # Korean market hours check
-└── telegram/
-    ├── client.py        # Telegram API client
-    └── formatter.py     # Message formatting
-```
+### Scan flow (`_scan_stocks`)
 
-### Core Components
+For each watchlist ticker:
+1. Skip if a position is already open (`has_position`).
+2. Skip if a signal was already recorded today (`has_signal_today`). This prevents duplicate alerts.
+3. `analyze_stock()` → pattern detection on ~`ANALYSIS_PERIOD_DAYS` of pykrx OHLCV.
+4. On a signal: `record_signal()` **first**, then `positions.add()`. Only if the add succeeds: `mark_position_opened()` and send the Telegram alert.
 
-**BreakoutDetector** (`bot/detector.py`): Main bot orchestrating scans, position tracking, and Telegram commands
-- `run()`: Main loop with scan interval
-- `run_scan()`: On-demand scan
-- `process_command()`: Telegram command handler
-- `check_positions()`: Periodic P&L check with auto stop-loss/take-profit
+Keep this ordering when changing the flow. Recent fixes (duplicate notifications, `position_opened` tracking) depend on it.
 
-**BacktestEngine** (`backtest/engine.py`): Historical strategy testing
-- `run_backtest()`: Single ticker backtest
-- `run_portfolio_backtest()`: Multi-ticker with position limits
-- `calculate_performance()`: Returns win rate, CAGR, pattern stats
+### Pattern detection: live bot vs. backtest differ
 
-**Settings** (`config/settings.py`): Dataclass-based config loaded from `.env` file via python-dotenv
+- The **live bot uses only the pivot breakout** (`patterns/pivot.detect_pivot_breakout`). `patterns/cup_handle.py` and `patterns/base.py` are exported but **not used by the bot**.
+- `BacktestEngine` runs cup, pivot, and base. Pivot is shared through `detect_pivot_breakout_at_index`. Cup-and-handle and base breakout are **separate inline copies inside `backtest/engine.py` with hard-coded thresholds**, so they ignore `PatternSettings` / `.env`. Pattern tuning has to be applied in both places, or the copies need to be unified.
+- The backtest CLI uses only the first 20 watchlist tickers from settings (not `watchlist.json`) and writes CSVs to `output/` at the repo root.
 
-### Data Flow
+### Storage: `PositionManager` facade
 
-```
-Telegram Commands → BreakoutDetector.process_command()
-                         ↓
-              Data Retrieval (kr_stock.py via pykrx)
-                         ↓
-              Pattern Detection (patterns/pivot.py)
-                         ↓
-         Signal? → Yes → PositionManager.add() + Telegram alert
-                   No  → Log & skip
-                         ↓
-         Periodic check_positions() (stop-loss/take-profit/expiry)
-```
+`positions/manager.py` defines `BasePositionManager` (ABC holding the exit-condition math) with two implementations, `JsonPositionManager` (`positions.json` + `signals.json` in the CWD) and `DatabasePositionManager` (`database/connection.py`, psycopg2 over `sshtunnel`). `PositionManager` picks one based on `USE_DATABASE` and delegates every call to it. A new position operation has to be added to the ABC, both implementations, and the facade.
 
-### Configuration
+When serializing signal dicts to JSON/DB, cast numpy scalars (`int64`/`float64`) to Python types first. This has caused bugs before.
 
-Settings are loaded from `.env` file (copy `.env.example` to `.env`).
+### Watchlist
 
-**Key settings:**
-- `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID` - Bot credentials (required)
-- `SCAN_INTERVAL` - Scan interval in seconds (default: 1800)
-- `KR_WATCH_LIST` - Comma-separated stock codes
-- `VOLUME_SURGE_MIN` - Pivot breakout volume threshold (default: 50%)
-- `STOP_LOSS_PERCENT` - Stop loss percentage (default: -7.5%)
+`WatchlistManager` loads `watchlist.json` when it exists. In that case `KR_WATCH_LIST` from `.env` is only the initial default and gets ignored. `/add` and `/remove` edit the JSON file.
 
-### Telegram Commands
+### Threading
 
-| Command | Description |
-|---------|-------------|
-| `/scan` | Trigger market scan |
-| `/add [CODE]`, `/remove [CODE]` | Manage watchlist |
-| `/list` | Show watchlist |
-| `/positions` | Show holdings with P&L |
-| `/close [CODE]` | Close position manually |
-| `/status` | Market hours status |
+- Main thread: `run()` → `run_smart_scan()` every `SCAN_INTERVAL` seconds. Outside market hours it only runs `check_positions()`.
+- Daemon thread: Telegram long-polling (`start_command_listener`, 2s loop) → `process_command()`.
+- `/scan` makes `process_command` return the sentinel `'SCAN_KR'`, and the listener then starts a daemon thread running `_execute_scan_in_thread()`, guarded by `scan_lock` + `is_scanning`. The scheduled scan only checks `is_scanning` and skips its cycle when a manual scan is running.
 
-## Threading Model
+### Market hours
 
-- Main thread: Scan loop (interval from `SCAN_INTERVAL`) + position checks
-- Background daemon: Telegram polling (2-sec interval via `start_command_listener()`)
-- Manual `/scan` commands spawn daemon threads
-- `scan_lock` mutex prevents concurrent scans
+`market/status.get_market_status()` treats **08:00–17:00 on weekdays, using the host's local clock** (`datetime.now()`, no timezone) as "open". User-facing messages say 09:00–15:30. The host must run in KST, and Korean public holidays are not handled.
 
-## Adding New Features
+## Adding features
 
-- **Telegram command:** Add case to `BreakoutDetector.process_command()` in `bot/detector.py`
-- **New pattern:** Create `detect_*()` in `patterns/`, integrate in `BreakoutDetector.analyze_stock()`
-- **Config option:** Add to `Settings` dataclass in `config/settings.py`, load in `load_settings()`
-- **Backtest pattern:** Add detection method to `BacktestEngine`, call in `run_backtest()`
+- **Telegram command:** add a branch in `BreakoutDetector.process_command()` and update `_get_help_message()`.
+- **Live pattern:** add `detect_*()` in `patterns/`, call it from `BreakoutDetector.analyze_stock()`. The returned signal dict needs at least `current_price` and `pattern`.
+- **Config option:** add a field to the relevant dataclass in `config/settings.py`, read it in `load_settings()` via `_get_env_float/_int/_list`, and document it in `.env.example`.
