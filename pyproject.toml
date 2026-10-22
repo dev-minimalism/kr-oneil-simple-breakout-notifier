@@ -9,7 +9,7 @@ description = "William O'Neil Breakout Trading Bot - CAN SLIM strategy pattern d
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "Yungoo Park", email = "ygpark@lendingmachine.co.kr"}
+    {name = "dev-minimalism"}
 ]
 keywords = [
     "trading",

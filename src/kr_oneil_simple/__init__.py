@@ -7,8 +7,7 @@
 """
 
 __version__ = "3.0.0"
-__author__ = "Yungoo Park"
-__email__ = "ygpark@lendingmachine.co.kr"
+__author__ = "dev-minimalism"
 
 # 주요 클래스 노출
 from .bot import BreakoutDetector
