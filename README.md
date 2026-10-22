@@ -312,6 +312,7 @@ SSH_HOST=your_ssh_host
 SSH_PORT=22
 SSH_USER=your_ssh_user
 SSH_KEY_PATH=~/.ssh/id_rsa
+SSH_KNOWN_HOSTS=~/.ssh/known_hosts   # 호스트 키 검증 (기본값)
 
 # PostgreSQL (SSH 서버 기준 주소)
 DB_HOST=localhost
@@ -319,6 +320,14 @@ DB_PORT=5432
 DB_NAME=oneil_breakout
 DB_USER=your_db_user
 DB_PASSWORD=your_db_password
+```
+
+SSH 서버의 호스트 키가 `known_hosts`(`SSH_KNOWN_HOSTS`)에 등록되어 있어야 연결됩니다. 키가 없거나 다르면 중간자 공격을 막기 위해 연결을 거부합니다. 처음 한 번 서버 지문을 확인한 뒤 등록하세요.
+
+```bash
+ssh-keyscan -p 22 your_ssh_host >> ~/.ssh/known_hosts
+# 또는 한 번 직접 접속해서 지문 확인 후 yes
+ssh -i ~/.ssh/id_rsa your_ssh_user@your_ssh_host
 ```
 
 ---

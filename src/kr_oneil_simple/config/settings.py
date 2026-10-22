@@ -66,6 +66,7 @@ class DatabaseSettings:
     ssh_port: int = 22
     ssh_user: str = ""
     ssh_key_path: str = ""
+    ssh_known_hosts_path: str = "~/.ssh/known_hosts"
 
     # PostgreSQL
     db_host: str = "localhost"
@@ -204,6 +205,7 @@ def load_settings() -> Settings:
     settings.database.ssh_port = _get_env_int('SSH_PORT', 22)
     settings.database.ssh_user = os.environ.get('SSH_USER', '')
     settings.database.ssh_key_path = os.environ.get('SSH_KEY_PATH', '')
+    settings.database.ssh_known_hosts_path = os.environ.get('SSH_KNOWN_HOSTS', '~/.ssh/known_hosts')
     settings.database.db_host = os.environ.get('DB_HOST', 'localhost')
     settings.database.db_port = _get_env_int('DB_PORT', 5432)
     settings.database.db_name = os.environ.get('DB_NAME', 'oneil_breakout')

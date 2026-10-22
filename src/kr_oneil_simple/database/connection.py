@@ -25,12 +25,14 @@ class SSHTunnel:
         ssh_user: str,
         ssh_key_path: str,
         remote_host: str,
-        remote_port: int
+        remote_port: int,
+        known_hosts_path: str = "~/.ssh/known_hosts"
     ):
         self.ssh_host = ssh_host
         self.ssh_port = ssh_port
         self.ssh_user = ssh_user
         self.ssh_key_path = os.path.expanduser(ssh_key_path)
+        self.known_hosts_path = os.path.expanduser(known_hosts_path)
         self.remote_host = remote_host
         self.remote_port = remote_port
 
@@ -48,18 +50,37 @@ class SSHTunnel:
         """SSH 터널 시작"""
         # SSH 클라이언트 생성
         self._ssh_client = paramiko.SSHClient()
-        self._ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        # 호스트 키 검증 (중간자 공격 방지): known_hosts에 등록된 키만 허용
+        self._ssh_client.load_system_host_keys()
+        if os.path.exists(self.known_hosts_path):
+            self._ssh_client.load_host_keys(self.known_hosts_path)
+        self._ssh_client.set_missing_host_key_policy(paramiko.RejectPolicy())
 
         # RSA 키 로드
         pkey = paramiko.RSAKey.from_private_key_file(self.ssh_key_path)
 
         # SSH 연결
-        self._ssh_client.connect(
-            hostname=self.ssh_host,
-            port=self.ssh_port,
-            username=self.ssh_user,
-            pkey=pkey
-        )
+        try:
+            self._ssh_client.connect(
+                hostname=self.ssh_host,
+                port=self.ssh_port,
+                username=self.ssh_user,
+                pkey=pkey
+            )
+        except paramiko.BadHostKeyException:
+            raise paramiko.SSHException(
+                f"SSH 호스트 키가 known_hosts와 다릅니다 ({self.ssh_host}). "
+                f"서버 키가 실제로 바뀐 것이 아니라면 중간자 공격일 수 있습니다."
+            )
+        except paramiko.SSHException as e:
+            if "not found in known_hosts" not in str(e):
+                raise
+            raise paramiko.SSHException(
+                f"SSH 호스트 키가 known_hosts에 없습니다 ({self.ssh_host}). "
+                f"지문을 확인한 뒤 등록하세요: "
+                f"ssh-keyscan -p {self.ssh_port} {self.ssh_host} >> {self.known_hosts_path}"
+            ) from e
 
         # 로컬 소켓 바인딩 (자동 포트 할당)
         self._local_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -222,7 +243,8 @@ class DatabaseConnection:
                 ssh_user=self.settings.ssh_user,
                 ssh_key_path=self.settings.ssh_key_path,
                 remote_host=self.settings.db_host,
-                remote_port=self.settings.db_port
+                remote_port=self.settings.db_port,
+                known_hosts_path=self.settings.ssh_known_hosts_path
             )
             self._tunnel.start()
 
