@@ -467,7 +467,7 @@ MIT License — [LICENSE](LICENSE) 파일을 참고하세요.
 
 ## Author
 
-Yungoo Park (ygpark@lendingmachine.co.kr)
+[dev-minimalism](https://github.com/dev-minimalism)
 
 ## References
 
