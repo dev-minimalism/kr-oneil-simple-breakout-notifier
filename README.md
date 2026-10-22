@@ -463,7 +463,7 @@ BREAKOUT_MAX=3          # 5 → 3으로 하향
 
 ## License
 
-MIT License
+MIT License — [LICENSE](LICENSE) 파일을 참고하세요.
 
 ## Author
 
